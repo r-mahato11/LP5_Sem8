@@ -1,184 +1,111 @@
+#include <omp.h>
 #include <iostream>
-#include <vector>
 #include <queue>
 #include <stack>
 #include <chrono>
-#include <omp.h>
-
 using namespace std;
-using namespace chrono;
+using namespace std::chrono;
 
-const int MAX_NODES = 1000;
-
-
-void generateGraph(vector<vector<int>>& adjList, int numNodes) {
-    for (int i = 0; i < numNodes; i ++) {
-        for (int j = 0; j < numNodes; j++){
-            if(rand()%2){
-                adjList[i].push_back(j);
-                adjList[j].push_back(i);
-            }
-        }
+class Node
+{
+public:
+    int value;
+    Node *left;
+    Node *right;
+    Node()
+    {
+        // Required empty constructor.
     }
+    Node(int value)
+    {
+        this->value = value;
+        this->left = NULL;
+        this->right = NULL;
+    }
+};
+
+Node *generateTree(int values[], int length)
+{
+    if (length == 0)
+        return NULL;
+    Node *treeNodes[length];
+    for (int i = 0; i < length; i++)
+    {
+        if (values[i] != -1)
+            treeNodes[i] = new Node(values[i]);
+        else
+            treeNodes[i] = NULL;
+    }
+    int parent = 0;
+    int child = 1;
+    while (child < length)
+    {
+        if (treeNodes[parent] != NULL)
+        {
+            treeNodes[parent]->left = treeNodes[child++];
+            if (child < length)
+                treeNodes[parent]->right = treeNodes[child++];
+        }
+        parent++;
+    }
+    Node *root = treeNodes[0];
+    return root;
 }
 
-// Function to print the graph as an adjacency list
-void printGraph(const vector<vector<int>>& adjList) {
-    cout << "Graph (Adjacency List Representation):\n";
-    for (size_t i = 0; i < adjList.size(); ++i) {
-        cout << "Node " << i << ": ";
-        for (int neighbor : adjList[i]) {
-            cout << neighbor << " ";
-        }
-        cout << endl;
-    }
-    cout << endl;
-}
-
-void bfsSequential(const vector<vector<int>>& adjList, int startNode) {
-    vector<bool> visited(adjList.size(), false);
-    queue<int> q;
-    q.push(startNode);
-    visited[startNode] = true;
-
-    cout << "BFS Sequential Order: ";
-    while (!q.empty()) {
-        int node = q.front();
+void bfs(Node *root)
+{
+    if (root == NULL)
+        return;
+    queue<Node *> q;
+    q.push(root);
+    while (!q.empty())
+    {
+        Node *node = q.front();
         q.pop();
-        // cout << node << " ";  // Print visited node
-        int k = 0;
-        for(int i : adjList[node]){
-            k += i;
-        }
-        for (int neighbor : adjList[node]) {
-            if (!visited[neighbor]) {
-                visited[neighbor] = true;
-                q.push(neighbor);
-            }
-        }
+        cout << node->value << " -> ";
+        if (node->left != NULL)
+            q.push(node->left);
+        if (node->right != NULL)
+            q.push(node->right);
     }
-    cout << endl;
 }
 
-void dfsSequential(const vector<vector<int>>& adjList, int startNode) {
-    vector<bool> visited(adjList.size(), false);
-    stack<int> s;
-    s.push(startNode);
-    visited[startNode] = true;
-
-    cout << "DFS Sequential Order: ";
-    while (!s.empty()) {
-        int node = s.top();
-        s.pop();
-        // cout << node << " ";  // Print visited node
-        int k = 0;
-        for(int i : adjList[node]){
-            k += i;
-        }
-        for (int neighbor : adjList[node]) {
-            if (!visited[neighbor]) {
-                visited[neighbor] = true;
-                s.push(neighbor);
-            }
-        }
+void dfs(Node *root)
+{
+    if (root == NULL)
+        return;
+#pragma omp critical
+    cout << root->value << " -> ";
+#pragma omp parallel sections num_threads(2)
+    {
+#pragma omp section
+        dfs(root->left);
+#pragma omp section
+        dfs(root->right);
     }
-    cout << endl;
 }
 
-void bfsParallel(const vector<vector<int>>& adjList, int startNode) {
-    vector<bool> visited(adjList.size(), false);
-    queue<int> q;
-    q.push(startNode);
-    visited[startNode] = true;
+int main()
+{
+    int values[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    int length = sizeof(values) / sizeof(int); // Calculate the length of array.
+    Node *root = generateTree(values, length); // Generate the binary tree.
 
-    cout << "BFS Parallel Order: ";
-    // Parallelize the marking of visited nodes
-    #pragma omp parallel
-    while (!q.empty()) {
-        int node = q.front();
-        q.pop();
-        // cout << node << " ";  // Print visited node
+    // Measure execution time for BFS
+    auto start_bfs = high_resolution_clock::now();
+    cout << "BFS: ";
+    bfs(root);
+    auto stop_bfs = high_resolution_clock::now();
+    auto duration_bfs = duration_cast<microseconds>(stop_bfs - start_bfs);
+    cout << "\nExecution time for BFS: " << duration_bfs.count() << " microseconds" << endl;
 
-            #pragma omp parallel for
-            for (size_t i = 0; i < adjList[node].size(); ++i) {
-                int neighbor = adjList[node][i];
-                #pragma omp critical
-                {
-                    if (!visited[neighbor]) {
-                        visited[neighbor] = true;
-                        q.push(neighbor);
-                    }
-                }
-            }
-    }
-    cout << endl;
-}
-
-void dfsParallel(const vector<vector<int>>& adjList, int startNode) {
-    vector<bool> visited(adjList.size(), false);
-    stack<int> s;
-    s.push(startNode);
-    visited[startNode] = true;
-
-    cout << "DFS Parallel Order: ";
-    // Parallelize the marking of visited nodes
-    #pragma omp parallel
-    while (!s.empty()) {
-        int node = s.top();
-        s.pop();
-        // cout << node << " ";  // Print visited node
-            #pragma omp parallel for
-            for (size_t i = 0; i < adjList[node].size(); ++i) {
-                int neighbor = adjList[node][i];
-                #pragma omp critical
-                {
-                    if (!visited[neighbor]) {
-                        visited[neighbor] = true;
-                        s.push(neighbor);
-                    }
-                }
-            }
-    }
-    cout << endl;
-}
-
-int main() {
-    int nodes = 100;
-    cout << "enter : ";
-cin >> nodes;
-    vector<vector<int>> adjList(nodes);
-    generateGraph(adjList, nodes);
-
-    // Print the generated graph
-    // printGraph(adjList);
-
-    auto start = high_resolution_clock::now();
-    bfsSequential(adjList, 0);
-    auto end = high_resolution_clock::now();
-    double duration_seq = duration_cast<nanoseconds>(end - start).count();
-    cout << "BFS Sequential Time Taken: " << duration_seq << " ns" << endl << endl;
-
-    start = high_resolution_clock::now();
-    bfsParallel(adjList, 0);
-    end = high_resolution_clock::now();
-    double duration_par = duration_cast<nanoseconds>(end - start).count();
-    cout << "BFS Parallel Time Taken: " << duration_par << " ns" << endl << endl;
-
-    cout << "Speedup Factor for BFS: " << duration_seq / duration_par << "\n\n";
-
-    start = high_resolution_clock::now();
-    dfsSequential(adjList, 0);
-    end = high_resolution_clock::now();
-    duration_seq = duration_cast<nanoseconds>(end - start).count();
-    cout << "DFS Sequential Time Taken: " << duration_seq << " ns" << endl << endl;
-
-    start = high_resolution_clock::now();
-    dfsParallel(adjList, 0);
-    end = high_resolution_clock::now();
-    duration_par = duration_cast<nanoseconds>(end - start).count();
-    cout << "DFS Parallel Time Taken: " << duration_par << " ns" << endl << endl;
-
-    cout << "Speedup Factor for DFS: " << duration_seq / duration_par << "\n\n";
+    // Measure execution time for DFS
+    auto start_dfs = high_resolution_clock::now();
+    cout << "DFS: ";
+    dfs(root);
+    auto stop_dfs = high_resolution_clock::now();
+    auto duration_dfs = duration_cast<microseconds>(stop_dfs - start_dfs);
+    cout << "\nExecution time for DFS: " << duration_dfs.count() << " microseconds" << endl;
 
     return 0;
 }

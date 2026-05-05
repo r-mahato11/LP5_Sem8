@@ -1,129 +1,119 @@
-#include <iostream>
-#include <chrono>
 #include <omp.h>
-#include <vector>
-using namespace std;
+#include <iostream>
+#include <string>
+#include <chrono>
+
 using namespace std::chrono;
+using namespace std;
 
-// Sequential Bubble Sort
-void bubble_sort(vector<int>& arr, int n) {
-    for (int i = 0; i < n - 1; i++) {
-        for (int j = 0; j < n - i - 1; j++) {
-            if (arr[j] > arr[j + 1]) {
-                swap(arr[j], arr[j + 1]);
-            }
-        }
+void displayArray(string message, int nums[], int length)
+{
+    cout << "\t" << message << ": [";
+    for (int i = 0; i < length; i++)
+    {
+        cout << nums[i];
+        if (i != length - 1)
+            cout << ", ";
     }
-}
-// Sequential Merge Sort
-void merge(vector<int>& arr, int start, int mid, int end) {
-    vector<int> left(arr.begin() + start, arr.begin() + mid + 1);
-    vector<int> right(arr.begin() + mid + 1, arr.begin() + end + 1);
-
-    int i = 0, j = 0, k = start;
-    while (i < left.size() && j < right.size()) {
-        if (left[i] <= right[j]) {
-            arr[k++] = left[i++];
-        } else {
-            arr[k++] = right[j++];
-        }
-    }
-    while (i < left.size()) arr[k++] = left[i++];
-    while (j < right.size()) arr[k++] = right[j++];
+    cout << "]" << endl;
 }
 
-void merge_sort(vector<int>& arr, int start, int end) {
-    if (start < end) {
-        int mid = start + (end - start) / 2;
-        merge_sort(arr, start, mid);
-        merge_sort(arr, mid + 1, end);
-        merge(arr, start, mid, end);
+void merge(int nums[], int leftStart, int leftEnd, int rightStart, int rightEnd)
+{
+    int n = (rightEnd - leftStart) + 1; // Size of both arrays
+    int tempArray[n];
+
+    int t = 0;           // Index for temporary array
+    int l = leftStart;   // Index for left array
+    int r = rightStart;  // Index for right array
+
+    // Merge both arrays into tempArray
+    while (l <= leftEnd && r <= rightEnd)
+    {
+        if (nums[l] <= nums[r])
+            tempArray[t++] = nums[l++];
+        else
+            tempArray[t++] = nums[r++];
     }
+
+    // Copy remaining elements from left array
+    while (l <= leftEnd)
+        tempArray[t++] = nums[l++];
+
+    // Copy remaining elements from right array
+    while (r <= rightEnd)
+        tempArray[t++] = nums[r++];
+
+    // Copy back to original array
+    for (int i = 0; i < n; i++)
+        nums[leftStart + i] = tempArray[i];
 }
 
-// Parallel Bubble Sort
-void parallel_bubble_sort(vector<int>& arr, int n) {
-    bool sorted = false;
-    while (!sorted) {
-        sorted = true;
-        #pragma omp parallel for shared(arr, sorted)
-        for (int i = 0; i < n - 1; i += 2) {
-            if (arr[i] > arr[i + 1]) {
-                swap(arr[i], arr[i + 1]);
-                sorted = false;
-            }
-        }
-        #pragma omp parallel for shared(arr, sorted)
-        for (int i = 1; i < n - 1; i += 2) {
-            if (arr[i] > arr[i + 1]) {
-                swap(arr[i], arr[i + 1]);
-                sorted = false;
-            }
-        }
-    }
-}
-void parallel_merge_sort(vector<int>& arr, int start, int end) {
-    if (start < end) {
-        int mid = start + (end - start) / 2;
-        #pragma omp parallel sections
+void mergeSort(int nums[], int start, int end)
+{
+    if (start < end)
+    {
+        int mid = (start + end) / 2;
+#pragma omp parallel sections num_threads(2)
         {
-            #pragma omp section
-            parallel_merge_sort(arr, start, mid);
-            #pragma omp section
-            parallel_merge_sort(arr, mid + 1, end);
+#pragma omp section
+            mergeSort(nums, start, mid);
+#pragma omp section
+            mergeSort(nums, mid + 1, end);
         }
-        merge(arr, start, mid, end);
+        merge(nums, start, mid, mid + 1, end);
     }
 }
 
-int main() {
-    cout << "Enter number of elements: ";
-    int n;
-    cin >> n;
-
-    vector<int> arr(n);
-    for (int i = 0; i < n; i++) {
-        arr[i] = rand() % 100;
-        cout<<arr[i]<<" ";
+void bubbleSort(int nums[], int length)
+{
+    for (int i = 0; i < length; i++)
+    {
+        int start = i % 2; // Start from 0 if i is even else 1
+#pragma omp parallel for
+        for (int j = start; j < length - 1; j += 2)
+        {
+            if (nums[j] > nums[j + 1])
+            {
+                int temp = nums[j];
+                nums[j] = nums[j + 1];
+                nums[j + 1] = temp;
+            }
+        }
     }
-    
-    vector<int> arr_copy = arr;
-    
-    cout<<"\n\nSequential Execution : \n\n";
-    cout<<"Bubble Sort : ";
-    auto start = high_resolution_clock::now();
-    bubble_sort(arr, n);
-    auto end = high_resolution_clock::now();
-    double seq_bubble_time = duration<double, milli>(end - start).count();
-    cout << "\nTIME TAKEN: " << seq_bubble_time << " ms\n";
-    
-    cout<<"\nMerge Sort : ";
-    arr = arr_copy;
-    start = high_resolution_clock::now();
-    merge_sort(arr, 0, n - 1);
-    end = high_resolution_clock::now();
-    double seq_merge_time = duration<double, milli>(end - start).count();
-    cout << "\nTIME TAKEN: " << seq_merge_time << " ms\n";
+}
 
+int main()
+{
+    // Bubble Sort Example
+    int nums1[] = {4, 6, 2, 0, 7, 6, 1, 9, -3, -5};
+    int length1 = sizeof(nums1) / sizeof(int);
 
-    cout<<"\nParallel Execution : \n\n";
-    cout<<"Bubble Sort : \n";
-    arr = arr_copy;
-    start = high_resolution_clock::now();
-    parallel_bubble_sort(arr, n);
-    end = high_resolution_clock::now();
-    double par_bubble_time = duration<double, milli>(end - start).count();
-    cout << "TIME : " << par_bubble_time << " ms\n";
-    cout << "Speedup : " << seq_bubble_time / par_bubble_time << "\n";
-    
-    cout<<"\nMerge Sort : \n";
-    arr = arr_copy;
-    start = high_resolution_clock::now();
-    parallel_merge_sort(arr, 0, n - 1);
-    end = high_resolution_clock::now();
-    double par_merge_time = duration<double, milli>(end - start).count();
-    cout << "TIME : " << par_merge_time << " ms\n";
-    cout << "Speedup : " << seq_merge_time / par_merge_time << "\n";
-    
+    cout << "Bubble Sort:" << endl;
+    displayArray("Before", nums1, length1);
+
+    auto start_bubble = high_resolution_clock::now();
+    bubbleSort(nums1, length1);
+    auto end_bubble = high_resolution_clock::now();
+
+    displayArray("After", nums1, length1);
+    auto duration_bubble = duration_cast<microseconds>(end_bubble - start_bubble);
+    cout << "\nExecution time for Bubble Sort: " << duration_bubble.count() << " microseconds" << endl;
+
+    // Merge Sort Example
+    int nums2[] = {3, 5, 1, -1, 6, 5, 0, 8, -2, -4};
+    int length2 = sizeof(nums2) / sizeof(int);
+
+    cout << "\nMerge Sort:" << endl;
+    displayArray("Before", nums2, length2);
+
+    auto start_merge = high_resolution_clock::now();
+    mergeSort(nums2, 0, length2 - 1);
+    auto end_merge = high_resolution_clock::now();
+
+    displayArray("After", nums2, length2);
+    auto duration_merge = duration_cast<microseconds>(end_merge - start_merge);
+    cout << "\nExecution time for Merge Sort: " << duration_merge.count() << " microseconds" << endl;
+
     return 0;
 }
